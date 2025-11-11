@@ -1,0 +1,106 @@
+cmake_minimum_required(VERSION 3.18)
+project(gpu_burn_win LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Default compute capability (can be overridden)
+if(NOT DEFINED COMPUTE)
+    set(COMPUTE "75" CACHE STRING "CUDA Compute Capability")
+endif()
+
+# Convert compute capability to arch format (e.g., 75 -> compute_75, 100 -> compute_100, 120 -> compute_120)
+if(COMPUTE MATCHES "^[0-9]+$")
+    set(COMPUTE_ARCH "compute_${COMPUTE}")
+else()
+    set(COMPUTE_ARCH "${COMPUTE}")
+endif()
+
+message(STATUS "Building for CUDA Compute Capability: ${COMPUTE_ARCH}")
+
+# Find CUDA Toolkit
+find_package(CUDAToolkit REQUIRED)
+
+# Source files
+set(SOURCES
+    gpu_burn-drv.cpp
+)
+
+# PTX file output
+set(PTX_FILE "${CMAKE_CURRENT_BINARY_DIR}/compare.ptx")
+
+# Custom command to generate PTX from CUDA kernel
+add_custom_command(
+    OUTPUT ${PTX_FILE}
+    COMMAND "${CUDAToolkit_NVCC_EXECUTABLE}" -ptx -arch=${COMPUTE_ARCH} "${CMAKE_CURRENT_SOURCE_DIR}/compare.cu" -o "${PTX_FILE}"
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/compare.cu
+    COMMENT "Compiling CUDA kernel to PTX for ${COMPUTE_ARCH}"
+    VERBATIM
+)
+
+# Add executable
+add_executable(gpu_burn ${SOURCES} ${PTX_FILE})
+
+# Link CUDA libraries - Windows specific paths
+if(WIN32)
+    # Get CUDA library directory
+    get_filename_component(CUDA_LIB_DIR "${CUDAToolkit_NVCC_EXECUTABLE}" DIRECTORY)
+    get_filename_component(CUDA_ROOT "${CUDA_LIB_DIR}" DIRECTORY)
+    
+    # Add library directories
+    if(EXISTS "${CUDA_ROOT}/lib/x64")
+        target_link_directories(gpu_burn PRIVATE "${CUDA_ROOT}/lib/x64")
+    endif()
+    if(EXISTS "${CUDA_ROOT}/lib")
+        target_link_directories(gpu_burn PRIVATE "${CUDA_ROOT}/lib")
+    endif()
+    
+    # Link CUDA libraries directly
+    target_link_libraries(gpu_burn PRIVATE
+        cuda
+        cublas
+        cudart
+    )
+else()
+    # Linux/Mac linking
+    target_link_directories(gpu_burn PRIVATE
+        ${CUDAToolkit_LIBRARY_DIR}
+    )
+    target_link_libraries(gpu_burn PRIVATE
+        cuda
+        cublas
+        cudart
+    )
+endif()
+
+# Copy PTX file to output directory
+add_custom_command(TARGET gpu_burn POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${PTX_FILE}
+    $<TARGET_FILE_DIR:gpu_burn>/compare.ptx
+    COMMENT "Copying PTX file to output directory"
+)
+
+# Compiler flags
+if(MSVC)
+    target_compile_options(gpu_burn PRIVATE
+        /O2
+        /W3
+        /EHsc
+    )
+    # Linker flags to suppress LIBCMT warning
+    set_target_properties(gpu_burn PROPERTIES
+        LINK_FLAGS "/NODEFAULTLIB:LIBCMT"
+    )
+else()
+    target_compile_options(gpu_burn PRIVATE
+        -O3
+        -Wall
+    )
+endif()
+
+# Include CUDA directories
+target_include_directories(gpu_burn PRIVATE
+    ${CUDAToolkit_INCLUDE_DIRS}
+)
+

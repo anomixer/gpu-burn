@@ -8,6 +8,8 @@ Multi-GPU CUDA stress test
   - [Binary packages](#binary-packages)
   - [Building](#building)
   - [Usage](#usage)
+  - [Linux GUI front-end](#linux-gui-front-end)
+  - [Windows GUI front-end](#windows-gui-front-end)
 
 ## Easy docker build and run
 
@@ -98,8 +100,59 @@ can be set to change the resulting image tag:
     -tc    Try to use Tensor cores (if available)
     -l     List all GPUs in the system
     -i N   Execute only on GPU N
+    -c FILE   Use FILE as compare kernel (default compare.fatbin)
+    -stts T   SIGTERM timeout seconds for child processes (default 30)
     -h     Show this help message
     
     Example:
     gpu_burn -d 3600
 ```
+
+## Linux GUI front-end
+
+The Linux port also has a Tkinter wrapper, [linux/GPU-Burn-GUI.py](linux/GPU-Burn-GUI.py), around the unchanged native `gpu_burn`. It mirrors the Windows GUI's options, live burn console, and `nvidia-smi` monitor while leaving the backend untouched.
+
+![Linux GUI defaults](docs/screenshots/linux-gui-defaults-en.png)
+
+![Linux GUI live monitor](docs/screenshots/linux-gui-live-monitor-en.png)
+
+Build the native backend first (`make`), then launch from the repository root:
+
+```bash
+python3 linux/GPU-Burn-GUI.py
+# or
+sh linux/GPU-Burn-GUI.sh
+```
+
+- memory mode (`-m`): backend default (90% available VRAM), percent, or fixed MB; duration (`TIME`) defaults to **3600 seconds**
+- doubles (`-d`) unchecked by default, Tensor cores (`-tc`) checked by default
+- GPU selection via `CUDA_VISIBLE_DEVICES`, matching the Windows GUI
+- compare kernel (`-c`) and SIGTERM timeout (`-stts`)
+- live burn console shows every stdout/stderr line; the progress bar follows the backend's percentage redraws
+- live monitor tab refreshes `nvidia-smi` every second: GPU name, temperature, utilization, VRAM used/total, power draw/limit, fan speed
+- **Stop burn** sends SIGTERM to the backend process group, then SIGKILL if it does not exit within three seconds; closing the window during a burn stops it too
+
+The GUI uses stdlib Tkinter only (install `python3-tk` if needed), finds the native backend next to the repository or on `PATH`, and writes UTF-8 logs under `$XDG_STATE_HOME/gpu-burn-gui` (fallback `~/.local/state/gpu-burn-gui`). See [linux/README.md](linux/README.md#gpu-burn-gui-linux) for the complete option map, environment overrides, known limitations, and smoke-test steps.
+
+## Windows GUI front-end
+
+The Windows port has a WinForms wrapper, [GPU-Burn-GUI.cmd](GPU-Burn-GUI.cmd), around the original `gpu_burn.exe`:
+
+![Windows GUI smoke test (English)](docs/screenshots/gui-smoke-en.png)
+
+It exposes the same options in one window:
+
+- memory mode: backend default, percent, or fixed MB (`-m`), with a duration (`TIME`)
+- doubles (`-d`), Tensor cores (`-tc`)
+- GPU selection (via `CUDA_VISIBLE_DEVICES`, because the packaged `-i` path fails)
+- compare kernel (`-c`) and SIGTERM timeout (`-stts`)
+- Refresh GPUs (`-l`), help (`-h`), and a Stop burn button (`taskkill /T /F`)
+- Live burn console shows every `gpu_burn.exe` stdout line, including progress
+  redraws, in the bottom log
+- Live monitor tab refreshes `nvidia-smi` every second: GPU name, temperature,
+  utilization, VRAM used/total, power draw/limit, and fan speed; it is selected
+  automatically when a burn starts
+- The window opens with Tensor cores (`-tc`) enabled and the burn duration set
+  to 3600 seconds; change either before running if desired
+
+It keeps the backend untouched and finds `gpu_burn.exe`/`compare.fatbin` next to itself or in the usual build/package folders. See [win/README.md](win/README.md#gui-front-end) for caveats and the smoke-test walkthrough.

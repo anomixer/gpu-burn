@@ -47,3 +47,45 @@ gpu_burn.exe -m 50% 60     REM 50% of available VRAM, 1 minute
 gpu_burn.exe -i 0 60       REM only GPU 0
 gpu_burn.exe -l            REM list GPUs and exit
 ```
+
+## GUI front-end
+
+`GPU-Burn-GUI.cmd` (repository root) is a WinForms front-end around the
+unchanged `gpu_burn.exe`. It discovers the backend next to itself or in
+the build/package folders.
+
+![Windows GUI smoke test (English)](../docs/screenshots/gui-smoke-en.png)
+
+The GUI mirrors the command-line options:
+
+- Memory mode: backend default, percent of available VRAM, or fixed MB (`-m`)
+- Burn duration (`TIME`), doubles (`-d`), Tensor cores (`-tc`)
+- GPU selection through `CUDA_VISIBLE_DEVICES` (the packaged backend's `-i`
+  path fails because it does not initialize CUDA; the GUI uses the
+  environment variable instead)
+- Compare kernel (`-c`) and SIGTERM timeout (`-stts`)
+- Refresh GPUs (`-l`) and help (`-h`)
+
+The burn runs hidden; stdout/stderr are captured into log files, every stdout
+line (including the CR progress redraws) is appended to the live log, and the
+GUI turns progress into a progress bar. During a burn the GUI selects the
+`Live monitor` tab and refreshes `nvidia-smi` every second for GPU name,
+temperature, utilization, VRAM used/total, power draw/limit, and fan speed.
+A Stop burn button terminates the process tree with `taskkill /T /F`. The
+smoke-test path used during development can be enabled with
+`GPU_BURN_GUI_TEST=1`; `GPU_BURN_GUI_TEST_KEEP=1` keeps the window open for
+inspection. The GUI starts with Tensor cores (`-tc`) checked and burn duration
+3600 seconds; change the options before starting a burn.
+
+Known packaged-backend quirks:
+
+- `gpu_burn.exe -i 0 ...` fails with an initialization error, so this GUI
+  selects GPUs with `CUDA_VISIBLE_DEVICES` instead.
+- `gpu_burn.exe -d ...` may hang after the test on this build; use **Stop burn**
+  if needed.
+
+Smoke evidence: [gui-smoke-en.png](../docs/screenshots/gui-smoke-en.png),
+[gui-smoke-zh.png](../docs/screenshots/gui-smoke-zh.png),
+[gui-live-monitor-zh.png](../docs/screenshots/gui-live-monitor-zh.png),
+[gui-defaults-zh.png](../docs/screenshots/gui-defaults-zh.png), and the logs
+under `%LOCALAPPDATA%\GPU-Burn-GUI`.
